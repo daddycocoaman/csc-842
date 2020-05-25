@@ -19,7 +19,8 @@ Python script to output Firefox, Chrome 80+, and Edge (Chromium-based) cookies.
 `pip install requirements.txt`
 
 ### Usage
-```usage: CookieSnake.py [-h] [-f] [-c] [-e] [-d]
+```
+CookieSnake.py [-h] [-f] [-c] [-e] [-d]
 
 optional arguments:
   -h, --help  show this help message and exit
